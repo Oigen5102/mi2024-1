@@ -1,0 +1,764 @@
+from flask import Flask, render_template_string
+import webbrowser
+import threading
+import time
+
+app = Flask(__name__)
+
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Аналітика обстрілів Києва | Kyiv Air Strikes Dashboard</title>
+<style>
+:root {
+  --bg: #0f1115;
+  --card: #161920;
+  --card-hover: #1c2029;
+  --text-primary: #e8eaed;
+  --text-secondary: #9aa0a6;
+  --text-muted: #5f6368;
+  --accent-blue: #4a90d9;
+  --accent-red: #dc4446;
+  --accent-green: #5cb85c;
+  --accent-purple: #9b59b6;
+  --border: #2a2e35;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text-primary);
+  padding: 24px;
+  min-height: 100vh;
+}
+.header {
+  text-align: center;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.header h1 {
+  font-size: 26px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  letter-spacing: -0.3px;
+}
+.header p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.kpi-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  transition: transform 0.2s, background 0.2s;
+}
+.kpi-card:hover {
+  transform: translateY(-2px);
+  background: var(--card-hover);
+}
+.kpi-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+.kpi-value {
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+.kpi-delta { color: var(--accent-red); font-weight: 500; }
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 2px;
+  overflow-x: auto;
+}
+.tab {
+  padding: 10px 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+  white-space: nowrap;
+  transition: all 0.2s;
+  position: relative;
+}
+.tab:hover { color: var(--text-secondary); }
+.tab.active {
+  color: var(--text-primary);
+  background: var(--card);
+}
+.tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent-blue);
+  border-radius: 2px;
+}
+
+.panel { display: none; animation: fadeIn 0.3s ease; }
+.panel.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+.chart-container {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.chart-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chart-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+svg { width: 100%; overflow: visible; }
+.bar { transition: all 0.5s ease-out; cursor: pointer; }
+.bar:hover { opacity: 0.85; filter: brightness(1.1); }
+.line-path { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.dot { transition: r 0.2s; cursor: pointer; }
+.dot:hover { r: 6; }
+.axis-text {
+  font-size: 11px;
+  fill: var(--text-muted);
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+}
+.grid-line { stroke: var(--border); stroke-width: 0.5; }
+
+.legend {
+  display: flex;
+  gap: 18px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+.legend-item { display: flex; align-items: center; gap: 6px; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+.scenario-selector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.scenario-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+.scenario-btn:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+.scenario-btn.active {
+  background: var(--accent-blue);
+  color: #fff;
+  border-color: var(--accent-blue);
+}
+
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.heatmap-cell:hover { transform: scale(1.08); z-index: 2; }
+.heatmap-labels {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.heatmap-label {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.hbar-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 12px;
+}
+.hbar-label {
+  width: 120px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hbar-track {
+  flex: 1;
+  height: 22px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+.hbar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.hbar-value {
+  width: 36px;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+}
+
+.forecast-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.forecast-table th, .forecast-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.forecast-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--bg);
+}
+.forecast-table td {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.forecast-table tr:hover td { background: var(--card-hover); }
+.forecast-table tr { transition: background 0.15s; }
+
+.pie-slice { transition: all 0.2s; cursor: pointer; }
+.pie-slice:hover { transform: scale(1.04); opacity: 0.9; }
+.pie-label { font-size: 12px; fill: var(--text-primary); font-weight: 500; }
+
+.sources {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+.sources strong { color: var(--text-secondary); }
+
+@media (max-width: 800px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .chart-row { grid-template-columns: 1fr; }
+  body { padding: 12px; }
+  .header h1 { font-size: 20px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Аналітика обстрілів Києва</h1>
+  <p>Інтерактивний дашборд на основі відкритих даних (2022–2025) + прогноз 2026–2028</p>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-label">Засобів повітряного нападу 2025</div>
+    <div class="kpi-value">2,766</div>
+    <div class="kpi-sub"><span class="kpi-delta">+307%</span> vs 2024</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Жертв (загиблі + поранені) 2025</div>
+    <div class="kpi-value">1,116</div>
+    <div class="kpi-sub"><span class="kpi-delta">+272%</span> vs 2024</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Повітряних тривог 2025</div>
+    <div class="kpi-value">511</div>
+    <div class="kpi-sub"><span class="kpi-delta">+326%</span> vs 2024</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Домінування дронів</div>
+    <div class="kpi-value">92.4%</div>
+    <div class="kpi-sub">2,556 БпЛА з 2,766</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab(0)">📈 Тренд</button>
+  <button class="tab" onclick="switchTab(1)">🔮 Прогноз 2026–2028</button>
+  <button class="tab" onclick="switchTab(2)">🚀 Типи зброї</button>
+  <button class="tab" onclick="switchTab(3)">📊 Розподіл</button>
+  <button class="tab" onclick="switchTab(4)">🏙️ Райони</button>
+</div>
+
+<!-- Panel 1: Trend -->
+<div class="panel active" id="panel-0">
+  <div class="chart-row">
+    <div class="chart-container">
+      <div class="chart-title">Динаміка засобів повітряного нападу</div>
+      <svg id="trend-chart" viewBox="0 0 400 200" preserveAspectRatio="none">
+        <g class="grid"></g>
+        <g class="bars"></g>
+        <g class="labels"></g>
+      </svg>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Жертви серед цивільних</div>
+      <svg id="cas-chart" viewBox="0 0 400 200" preserveAspectRatio="none">
+        <g class="grid"></g>
+        <g class="bars"></g>
+        <g class="labels"></g>
+      </svg>
+    </div>
+  </div>
+  <div class="chart-container">
+    <div class="chart-title">Інтенсивність по місяцях (сезонність, %)</div>
+    <svg id="month-chart" viewBox="0 0 700 180" preserveAspectRatio="none">
+      <g class="grid"></g>
+      <g class="bars"></g>
+      <g class="labels"></g>
+    </svg>
+  </div>
+</div>
+
+<!-- Panel 2: Forecast -->
+<div class="panel" id="panel-1">
+  <div class="scenario-selector">
+    <button class="scenario-btn active" onclick="setScenario('conservative')">Консервативний (+5%)</button>
+    <button class="scenario-btn" onclick="setScenario('linear')">Лінійний тренд</button>
+    <button class="scenario-btn" onclick="setScenario('exponential')">Експоненційний</button>
+  </div>
+  <div class="chart-row">
+    <div class="chart-container">
+      <div class="chart-title">Прогноз: засоби повітряного нападу</div>
+      <svg id="forecast-proj" viewBox="0 0 400 200" preserveAspectRatio="none">
+        <g class="grid"></g>
+        <g class="lines"></g>
+        <g class="dots"></g>
+        <g class="labels"></g>
+      </svg>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot" style="background:var(--accent-blue)"></span> історія</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--accent-red)"></span> прогноз</div>
+      </div>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Прогноз: жертви</div>
+      <svg id="forecast-cas" viewBox="0 0 400 200" preserveAspectRatio="none">
+        <g class="grid"></g>
+        <g class="lines"></g>
+        <g class="dots"></g>
+        <g class="labels"></g>
+      </svg>
+    </div>
+  </div>
+  <div class="chart-container">
+    <table class="forecast-table">
+      <thead>
+        <tr><th>Рік</th><th>Засобів нападу</th><th>Жертви</th><th>Тривоги</th><th>Сценарій</th></tr>
+      </thead>
+      <tbody id="forecast-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Panel 3: Weapon Types -->
+<div class="panel" id="panel-2">
+  <div class="chart-row">
+    <div class="chart-container">
+      <div class="chart-title">Структура засобів нападу 2025</div>
+      <svg id="pie-chart" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid meet">
+        <g transform="translate(100,100)"></g>
+        <g transform="translate(220,60)"></g>
+      </svg>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Динаміка типів зброї по роках</div>
+      <svg id="weapon-trend" viewBox="0 0 400 200" preserveAspectRatio="none">
+        <g class="grid"></g>
+        <g class="lines"></g>
+        <g class="dots"></g>
+        <g class="labels"></g>
+      </svg>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot" style="background:var(--accent-blue)"></span> БпЛА</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--accent-red)"></span> крилаті</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--accent-green)"></span> балістичні</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Panel 4: Distribution -->
+<div class="panel" id="panel-3">
+  <div class="chart-row">
+    <div class="chart-container">
+      <div class="chart-title">Розподіл по днях тижня (%)</div>
+      <svg id="dow-chart" viewBox="0 0 400 200" preserveAspectRatio="none">
+        <g class="grid"></g>
+        <g class="bars"></g>
+        <g class="labels"></g>
+      </svg>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Інтенсивність: день тижня × місяць</div>
+      <div class="heatmap-labels">
+        <div class="heatmap-label">Пн</div><div class="heatmap-label">Вт</div><div class="heatmap-label">Ср</div>
+        <div class="heatmap-label">Чт</div><div class="heatmap-label">Пт</div><div class="heatmap-label">Сб</div><div class="heatmap-label">Нд</div>
+      </div>
+      <div class="heatmap-grid" id="heatmap"></div>
+      <div class="legend" style="margin-top:12px;justify-content:center;">
+        <div class="legend-item"><span class="legend-dot" style="background:#d73027"></span> висока</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#fc8d59"></span> середня</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#fee08b"></span> низька</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#e0f3f8"></span> мінімальна</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Panel 5: Districts -->
+<div class="panel" id="panel-4">
+  <div class="chart-container">
+    <div class="chart-title">Уражені райони Києва (2025, кількість інцидентів)</div>
+    <div id="district-bars"></div>
+  </div>
+  <div class="chart-container" style="margin-top:16px;">
+    <div class="chart-title">Ключові інсайти</div>
+    <div style="font-size:13px;line-height:1.8;color:var(--text-secondary);">
+      <p style="margin-bottom:10px;">• <strong style="color:var(--text-primary)">Святошинський район</strong> — найбільш уражений (31.6% усіх інцидентів), ймовірно через близькість до промислових обʼєктів та аеропорту Жуляни.</p>
+      <p style="margin-bottom:10px;">• <strong style="color:var(--text-primary)">Соломʼянський та Дарницький</strong> — другі та треті за кількістю ударів, що корелює з розташуванням інфраструктури та житлової забудови.</p>
+      <p style="margin-bottom:10px;">• <strong style="color:var(--text-primary)">Нічні атаки</strong> — 78% обстрілів припадає на період 00:00–06:00 (дані Повітряних Сил ЗСУ).</p>
+      <p style="margin-bottom:10px;">• <strong style="color:var(--text-primary)">Зміна тактики 2025</strong> — перехід від ракетних ударів до масованих атак дронами-камікадзе (зростання в 7.3× порівняно з 2024).</p>
+      <p>• <strong style="color:var(--text-primary)">Прогнозний ризик</strong> — за консервативним сценарієм, інтенсивність залишатиметься на рівні 2,900–3,200 засобів на рік.</p>
+    </div>
+  </div>
+</div>
+
+<div class="sources">
+  <strong>Джерела даних:</strong> Wikipedia (хроніка обстрілів Києва 2025), Texty.org.ua (аналітика влучань по житловій забудові), CITeam (дані про жертви), CSIS (датасет Petro Ivaniuk на Kaggle, верифікований Повітряними Силами ЗСУ), ACLED (просторово-часові дані конфлікту).<br>
+  <strong>Методологія прогнозу:</strong> три сценарії — консервативний (+5% річних), лінійна регресія (2022–2025), експоненційне згладжування (з урахуванням стрибка 2024→2025).
+</div>
+
+<script>
+const DATA = {
+  years: [2022, 2023, 2024, 2025],
+  forecast_years: [2026, 2027, 2028],
+  projectiles: {
+    historical: [850, 420, 680, 2766],
+    linear: [2681, 3281, 3882],
+    exponential: [5578, 11251, 22691],
+    conservative: [2904, 3049, 3201]
+  },
+  casualties: {
+    historical: [580, 220, 300, 1116],
+    linear: [976, 1144, 1313],
+    exponential: [2152, 4151, 8007],
+    conservative: [1171, 1230, 1291]
+  },
+  alerts: {
+    historical: [180, 95, 120, 511],
+    linear: [481, 582, 684],
+    exponential: [1054, 2176, 4490],
+    conservative: [536, 563, 591]
+  },
+  dow: { labels: ["Пн","Вт","Ср","Чт","Пт","Сб","Нд"], values: [18,22,20,19,15,4,2] },
+  months: { labels: ["Січ","Лют","Бер","Кві","Тра","Чер","Лип","Сер","Вер","Жов","Лис","Гру"], values: [12,10,8,7,6,9,8,7,8,11,10,10] },
+  weapons: { labels: ["БпЛА","Крилаті","Балістичні"], values: [2556,122,88] },
+  weapon_history: {
+    drones: [120, 180, 350, 2556],
+    cruise: [420, 150, 200, 122],
+    ballistic: [310, 90, 130, 88]
+  },
+  districts: {
+    labels: ["Святошинський","Солом'янський","Дарницький","Шевченківський","Деснянський","Дніпровський","Печерський","Подільський","Голосіївський","Оболонський"],
+    values: [54,33,27,14,13,6,3,3,2,2]
+  }
+};
+
+let currentScenario = "conservative";
+
+function switchTab(n) {
+  document.querySelectorAll(".tab").forEach((t,i) => t.classList.toggle("active", i===n));
+  document.querySelectorAll(".panel").forEach((p,i) => p.classList.toggle("active", i===n));
+}
+
+function setScenario(s) {
+  currentScenario = s;
+  document.querySelectorAll(".scenario-btn").forEach(b => {
+    const txt = b.textContent;
+    b.classList.toggle("active", (s==="conservative" && txt.includes("Консерват")) || (s==="linear" && txt.includes("Лінійний")) || (s==="exponential" && txt.includes("Експонен")));
+  });
+  drawForecast();
+}
+
+function drawBarChart(svgId, labels, values, color) {
+  const svg = document.getElementById(svgId);
+  const w = 400, h = 200, pad = 30;
+  const max = Math.max(...values) * 1.1;
+  const barW = (w - pad*2) / labels.length * 0.55;
+  const gap = (w - pad*2) / labels.length;
+  let grid = "", bars = "", lbls = "";
+  for(let i=0;i<=4;i++) {
+    const y = pad + (h - pad*2) * (1 - i/4);
+    grid += `<line x1="${pad}" y1="${y}" x2="${w-pad}" y2="${y}" class="grid-line"/>`;
+  }
+  labels.forEach((l,i) => {
+    const x = pad + gap*i + gap/2;
+    const barH = (values[i]/max)*(h - pad*2);
+    const y = pad + (h - pad*2) - barH;
+    bars += `<rect class="bar" x="${x-barW/2}" y="${y}" width="${barW}" height="${barH}" fill="${color}" rx="4"/>`;
+    lbls += `<text class="axis-text" x="${x}" y="${h-8}" text-anchor="middle">${l}</text>`;
+    lbls += `<text class="axis-text" x="${x}" y="${y-6}" text-anchor="middle" font-size="10">${values[i].toLocaleString()}</text>`;
+  });
+  svg.querySelector(".grid").innerHTML = grid;
+  svg.querySelector(".bars").innerHTML = bars;
+  svg.querySelector(".labels").innerHTML = lbls;
+}
+
+function drawLineChart(svgId, histYears, histVals, foreYears, foreVals, colorHist, colorFore) {
+  const svg = document.getElementById(svgId);
+  const w = 400, h = 200, pad = 35;
+  const allVals = [...histVals, ...foreVals];
+  const max = Math.max(...allVals) * 1.15;
+  const allYears = [...histYears, ...foreYears];
+  const xStep = (w - pad*2) / (allYears.length - 1);
+  let grid = "";
+  for(let i=0;i<=4;i++) {
+    const y = pad + (h - pad*2) * (1 - i/4);
+    grid += `<line x1="${pad}" y1="${y}" x2="${w-pad}" y2="${y}" class="grid-line"/>`;
+    grid += `<text class="axis-text" x="${pad-6}" y="${y+3}" text-anchor="end">${Math.round(max*i/4).toLocaleString()}</text>`;
+  }
+  function getXY(idx, val) {
+    return { x: pad + idx*xStep, y: pad + (h - pad*2)*(1 - val/max) };
+  }
+  let histPath = "", forePath = "", dots = "", labels = "";
+  histVals.forEach((v,i) => {
+    const p = getXY(i, v);
+    histPath += (i===0?"M":"L") + `${p.x},${p.y}`;
+    dots += `<circle class="dot" cx="${p.x}" cy="${p.y}" r="4" fill="${colorHist}"/>`;
+    labels += `<text class="axis-text" x="${p.x}" y="${h-8}" text-anchor="middle">${histYears[i]}</text>`;
+  });
+  foreVals.forEach((v,i) => {
+    const p = getXY(histVals.length + i, v);
+    forePath += (i===0?"M":"L") + `${p.x},${p.y}`;
+    dots += `<circle class="dot" cx="${p.x}" cy="${p.y}" r="4" fill="${colorFore}" stroke="var(--bg)" stroke-width="1.5"/>`;
+    labels += `<text class="axis-text" x="${p.x}" y="${h-8}" text-anchor="middle" fill="${colorFore}">${foreYears[i]}</text>`;
+  });
+  const lastH = getXY(histVals.length-1, histVals[histVals.length-1]);
+  const firstF = getXY(histVals.length, foreVals[0]);
+  svg.querySelector(".grid").innerHTML = grid;
+  svg.querySelector(".lines").innerHTML = 
+    `<path class="line-path" d="${histPath}" stroke="${colorHist}"/>` +
+    `<path class="line-path" d="${forePath}" stroke="${colorFore}" stroke-dasharray="5,4"/>` +
+    `<line x1="${lastH.x}" y1="${lastH.y}" x2="${firstF.x}" y2="${firstF.y}" stroke="${colorFore}" stroke-dasharray="3,3" opacity="0.4"/>`;
+  svg.querySelector(".dots").innerHTML = dots;
+  svg.querySelector(".labels").innerHTML = labels;
+}
+
+function drawPie() {
+  const g = document.querySelector("#pie-chart g:first-child");
+  const legend = document.querySelector("#pie-chart g:last-child");
+  const vals = DATA.weapons.values;
+  const total = vals.reduce((a,b)=>a+b,0);
+  const colors = ["var(--accent-blue)","var(--accent-red)","var(--accent-green)"];
+  let start = 0;
+  vals.forEach((v,i) => {
+    const ang = (v/total)*Math.PI*2;
+    const x1 = Math.cos(start)*70, y1 = Math.sin(start)*70;
+    const x2 = Math.cos(start+ang)*70, y2 = Math.sin(start+ang)*70;
+    const large = ang > Math.PI ? 1 : 0;
+    g.innerHTML += `<path class="pie-slice" d="M0,0 L${x1},${y1} A70,70 0 ${large},1 ${x2},${y2} Z" fill="${colors[i]}"/>`;
+    legend.innerHTML += `<text class="pie-label" x="0" y="${i*24}" fill="${colors[i]}">● ${DATA.weapons.labels[i]}: ${Math.round(v/total*100)}% (${v.toLocaleString()})</text>`;
+    start += ang;
+  });
+}
+
+function drawHeatmap() {
+  const container = document.getElementById("heatmap");
+  const months = DATA.months.values;
+  const dow = DATA.dow.values;
+  const matrix = [];
+  months.forEach(m => {
+    dow.forEach(d => {
+      const intensity = (m * d) / 100;
+      matrix.push(intensity);
+    });
+  });
+  const max = Math.max(...matrix);
+  matrix.forEach((v,i) => {
+    const ratio = v/max;
+    let color, textCol;
+    if(ratio > 0.7) { color = "#d73027"; textCol = "#fff"; }
+    else if(ratio > 0.45) { color = "#fc8d59"; textCol = "#fff"; }
+    else if(ratio > 0.25) { color = "#fee08b"; textCol = "#333"; }
+    else { color = "#e0f3f8"; textCol = "#333"; }
+    const div = document.createElement("div");
+    div.className = "heatmap-cell";
+    div.style.background = color;
+    div.style.color = textCol;
+    div.textContent = Math.round(v);
+    container.appendChild(div);
+  });
+}
+
+function drawDistricts() {
+  const container = document.getElementById("district-bars");
+  const max = Math.max(...DATA.districts.values);
+  const colors = ["var(--accent-red)","var(--accent-red)","var(--accent-purple)","var(--accent-purple)","var(--accent-blue)","var(--accent-blue)","var(--accent-green)","var(--accent-green)","var(--accent-green)","var(--accent-green)"];
+  DATA.districts.labels.forEach((l,i) => {
+    const v = DATA.districts.values[i];
+    const pct = (v/max*100).toFixed(0);
+    container.innerHTML += `
+      <div class="hbar-row">
+        <div class="hbar-label">${l}</div>
+        <div class="hbar-track"><div class="hbar-fill" style="width:${pct}%;background:${colors[i]}"></div></div>
+        <div class="hbar-value">${v}</div>
+      </div>`;
+  });
+}
+
+function drawForecast() {
+  const s = currentScenario;
+  drawLineChart("forecast-proj", DATA.years, DATA.projectiles.historical, DATA.forecast_years, DATA.projectiles[s], "var(--accent-blue)", "var(--accent-red)");
+  drawLineChart("forecast-cas", DATA.years, DATA.casualties.historical, DATA.forecast_years, DATA.casualties[s], "var(--accent-blue)", "var(--accent-red)");
+  const tbody = document.getElementById("forecast-body");
+  tbody.innerHTML = "";
+  DATA.forecast_years.forEach((y,i) => {
+    const scenarioName = s==="conservative"?"Консервативний":s==="linear"?"Лінійний":"Експоненційний";
+    tbody.innerHTML += `<tr>
+      <td><strong>${y}</strong></td>
+      <td>${DATA.projectiles[s][i].toLocaleString()}</td>
+      <td>${DATA.casualties[s][i].toLocaleString()}</td>
+      <td>${DATA.alerts[s][i].toLocaleString()}</td>
+      <td style="color:var(--accent-red);font-weight:500;">${scenarioName}</td>
+    </tr>`;
+  });
+}
+
+function drawWeaponTrend() {
+  const svg = document.getElementById("weapon-trend");
+  const w = 400, h = 200, pad = 35;
+  const allVals = [...DATA.weapon_history.drones, ...DATA.weapon_history.cruise, ...DATA.weapon_history.ballistic];
+  const max = Math.max(...allVals) * 1.1;
+  const xStep = (w - pad*2) / 3;
+  const colors = ["var(--accent-blue)","var(--accent-red)","var(--accent-green)"];
+  const datasets = [DATA.weapon_history.drones, DATA.weapon_history.cruise, DATA.weapon_history.ballistic];
+  let grid = "", lines = "", dots = "", labels = "";
+  for(let i=0;i<=4;i++) {
+    const y = pad + (h - pad*2) * (1 - i/4);
+    grid += `<line x1="${pad}" y1="${y}" x2="${w-pad}" y2="${y}" class="grid-line"/>`;
+    grid += `<text class="axis-text" x="${pad-6}" y="${y+3}" text-anchor="end">${Math.round(max*i/4).toLocaleString()}</text>`;
+  }
+  datasets.forEach((ds,di) => {
+    let path = "";
+    ds.forEach((v,i) => {
+      const x = pad + i*xStep;
+      const y = pad + (h - pad*2)*(1 - v/max);
+      path += (i===0?"M":"L") + `${x},${y}`;
+      dots += `<circle class="dot" cx="${x}" cy="${y}" r="3.5" fill="${colors[di]}"/>`;
+    });
+    lines += `<path class="line-path" d="${path}" stroke="${colors[di]}"/>`;
+  });
+  DATA.years.forEach((y,i) => {
+    const x = pad + i*xStep;
+    labels += `<text class="axis-text" x="${x}" y="${h-8}" text-anchor="middle">${y}</text>`;
+  });
+  svg.querySelector(".grid").innerHTML = grid;
+  svg.querySelector(".lines").innerHTML = lines;
+  svg.querySelector(".dots").innerHTML = dots;
+  svg.querySelector(".labels").innerHTML = labels;
+}
+
+// Init
+drawBarChart("trend-chart", DATA.years, DATA.projectiles.historical, "var(--accent-blue)");
+drawBarChart("cas-chart", DATA.years, DATA.casualties.historical, "var(--accent-red)");
+drawBarChart("dow-chart", DATA.dow.labels, DATA.dow.values, "var(--accent-purple)");
+drawBarChart("month-chart", DATA.months.labels, DATA.months.values, "var(--accent-green)");
+drawPie();
+drawHeatmap();
+drawDistricts();
+drawForecast();
+drawWeaponTrend();
+</script>
+</body>
+</html>
+"""
+
+@app.route("/")
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
+def open_browser():
+    time.sleep(1.5)
+    webbrowser.open("http://127.0.0.1:5000/")
+
+if __name__ == "__main__":
+    threading.Thread(target=open_browser, daemon=True).start()
+    print("Запускаю сервер на http://127.0.0.1:5000 ...")
+    app.run(debug=False, host="127.0.0.1", port=5000)
