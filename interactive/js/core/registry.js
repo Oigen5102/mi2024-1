@@ -1,0 +1,79 @@
+import { mount as mountCourseCatalog } from '../components/course-catalog.js';
+import { mount as mountAnalyticsPipeline } from '../components/analytics-pipeline.js';
+import { mount as mountDataQualityLab } from '../components/data-quality-lab.js';
+import { mount as mountKnowledgeCheck } from '../components/knowledge-check.js';
+import { mount as mountStorageModelExplorer } from '../components/storage-model-explorer.js';
+import { mount as mountSchemaNormalizationLab } from '../components/schema-normalization-lab.js';
+import { mount as mountSqlQueryLab } from '../components/sql-query-lab.js';
+import { mount as mountStorageDecisionLab } from '../components/storage-decision-lab.js';
+import { mount as mountRelationalSchemaBuilder } from '../components/relational-schema-builder.js';
+import { mount as mountSqlMissionLab } from '../components/sql-mission-lab.js';
+import { mount as mountEdaExplorer } from '../components/eda-explorer.js';
+import { mount as mountWorkflowMissionLab } from '../components/workflow-mission-lab.js';
+import { mount as mountTransformationLab } from '../components/transformation-lab.js';
+import { mount as mountSplitLeakageLab } from '../components/split-leakage-lab.js';
+import { mount as mountReadinessScorecard } from '../components/readiness-scorecard.js';
+import { mount as mountLessonRoadmap } from '../components/lesson-roadmap.js';
+import { mount as mountDecisionTradeoff } from '../components/decision-tradeoff.js';
+import { mount as mountMethodSelector } from '../components/method-selector.js';
+import { mount as mountMetricTradeoffLab } from '../components/metric-tradeoff-lab.js';
+import { mount as mountNeuralNetworkLab } from '../components/neural-network-lab.js';
+import { mount as mountConvolutionLab } from '../components/convolution-lab.js';
+import { mount as mountTransferRlLab } from '../components/transfer-rl-lab.js';
+import { mount as mountTextAnalysisLab } from '../components/text-analysis-lab.js';
+import { mount as mountVisualEncodingLab } from '../components/visual-encoding-lab.js';
+import { mount as mountDashboardBuilder } from '../components/dashboard-builder.js';
+import { mount as mountDesignCritiqueLab } from '../components/design-critique-lab.js';
+import { mount as mountAudienceAdaptationLab } from '../components/audience-adaptation-lab.js';
+import { mount as mountVisualizationMissionLab } from '../components/visualization-mission-lab.js';
+import { mount as mountInsightBriefLab } from '../components/insight-brief-lab.js';
+import { mount as mountIazLifecycleLab } from '../components/iaz-lifecycle-lab.js';
+import { mount as mountEffectivenessScorecard } from '../components/effectiveness-scorecard.js';
+import { mount as mountDevWorkflowExplorer } from '../components/dev-workflow-explorer.js';
+import { mount as mountSystemArchitectureLab } from '../components/system-architecture-lab.js';
+import { mount as mountIntegrationFlowLab } from '../components/integration-flow-lab.js';
+import { mount as mountCollectionMethodSelector } from '../components/collection-method-selector.js';
+import { mount as mountProvenanceLab } from '../components/provenance-lab.js';
+import { mount as mountFormatExchangeLab } from '../components/format-exchange-lab.js';
+import { mount as mountCollectionMissionLab } from '../components/collection-mission-lab.js';
+
+export const registry = {
+  'course-catalog': mountCourseCatalog,
+  'analytics-pipeline': mountAnalyticsPipeline,
+  'data-quality-lab': mountDataQualityLab,
+  'knowledge-check': mountKnowledgeCheck,
+  'storage-model-explorer': mountStorageModelExplorer,
+  'schema-normalization-lab': mountSchemaNormalizationLab,
+  'sql-query-lab': mountSqlQueryLab,
+  'storage-decision-lab': mountStorageDecisionLab,
+  'relational-schema-builder': mountRelationalSchemaBuilder,
+  'sql-mission-lab': mountSqlMissionLab,
+  'eda-explorer': mountEdaExplorer,
+  'workflow-mission-lab': mountWorkflowMissionLab,
+  'transformation-lab': mountTransformationLab,
+  'split-leakage-lab': mountSplitLeakageLab,
+  'readiness-scorecard': mountReadinessScorecard,
+  'lesson-roadmap': mountLessonRoadmap,
+  'decision-tradeoff': mountDecisionTradeoff,
+  'method-selector': mountMethodSelector,
+  'metric-tradeoff-lab': mountMetricTradeoffLab,
+  'neural-network-lab': mountNeuralNetworkLab,
+  'convolution-lab': mountConvolutionLab,
+  'transfer-rl-lab': mountTransferRlLab,
+  'text-analysis-lab': mountTextAnalysisLab,
+  'visual-encoding-lab': mountVisualEncodingLab,
+  'dashboard-builder': mountDashboardBuilder,
+  'design-critique-lab': mountDesignCritiqueLab,
+  'audience-adaptation-lab': mountAudienceAdaptationLab,
+  'visualization-mission-lab': mountVisualizationMissionLab,
+  'insight-brief-lab': mountInsightBriefLab,
+  'iaz-lifecycle-lab': mountIazLifecycleLab,
+  'effectiveness-scorecard': mountEffectivenessScorecard,
+  'dev-workflow-explorer': mountDevWorkflowExplorer,
+  'system-architecture-lab': mountSystemArchitectureLab,
+  'integration-flow-lab': mountIntegrationFlowLab,
+  'collection-method-selector': mountCollectionMethodSelector,
+  'provenance-lab': mountProvenanceLab,
+  'format-exchange-lab': mountFormatExchangeLab,
+  'collection-mission-lab': mountCollectionMissionLab,
+};
